@@ -1,13 +1,12 @@
-import cv2
-import numpy as np
-import os
-import random
-import math
+import cv2 # video processing
+import numpy as np # used for array,image calc,sorting etc
+import os # creating folder
+import random # shuffle selected frames , divide frames b/w train and validation
+import math # for calculation purposes
 
 # CONFIGURATION
 VIDEO_PATHS = [
-    "con.mp4",
-    "conveyor.mp4",
+    "finetune.mp4",
 ]
 # How many frames to sample from each video.
 # The script chooses frames spread throughout the video.
@@ -27,9 +26,9 @@ LABEL_VAL_DIR = os.path.join(
     OUTPUT_DIR, "labels", "val"
 )
 # Validation percentage
-VAL_PERCENT = 0.20
+VAL_PERCENT = 0.20 # 20% images go to validation,80 to training
 # Maximum candidates shown for correction
-MAX_CANDIDATES = 80
+MAX_CANDIDATES = 80 # 80 boxes max to find region
 # Candidate filtering
 MIN_BOX_AREA_PERCENT = 0.0005
 MAX_BOX_AREA_PERCENT = 0.08
@@ -37,7 +36,7 @@ MAX_BOX_AREA_PERCENT = 0.08
 MIN_ASPECT = 0.25
 MAX_ASPECT = 4.5
 # Candidate overlap suppression
-NMS_THRESHOLD = 0.35
+NMS_THRESHOLD = 0.35 # Non-Maximum Suppression avoid multiple counting
 
 # CREATE DIRECTORIES
 for directory in [
@@ -50,15 +49,15 @@ for directory in [
 
 # GLOBAL GUI STATE
 
-current_boxes = []
-original_candidates = []
+current_boxes = [] # boxes accepted
+original_candidates = [] # boxes generated automatically by OpenCV
 drawing = False
 start_point = None
 current_mouse = (0, 0)
 frame = None
 display = None
 # IOU
-
+# Intersection Over Union.- IoU = intersection area / union area
 def box_iou(box1, box2):
     x1, y1, x2, y2 = box1
     a1, b1, a2, b2 = box2
@@ -76,7 +75,7 @@ def box_iou(box1, box2):
         return 0
     return intersection / union
 
-# NON-MAXIMUM SUPPRESSION
+# NON-MAXIMUM SUPPRESSION - removes overlapping duplicates
 def nms_boxes(boxes, scores):
     if len(boxes) == 0:
         return []
@@ -93,6 +92,7 @@ def nms_boxes(boxes, scores):
     return [boxes[i]for i in keep]
 
 # RECTANGULARITY
+# measures how much contour fills its bounding rectangle
 def rectangularity(contour):
     area = cv2.contourArea(contour)
     x, y, w, h = cv2.boundingRect(contour)
@@ -100,7 +100,13 @@ def rectangularity(contour):
     if rectangle_area <= 0:
         return 0
     return area / rectangle_area
+
 # AUTOMATIC BISCUIT PROPOSALS
+#automatic annotation engine - find region that might be biscuits.
+#Mask 1 → color
+#Mask 2 → local brightness
+#Mask 3 → adaptive threshold
+#Mask 4 → edges
 def generate_candidates(image):
     h, w = image.shape[:2]
     image_area = h * w
@@ -194,7 +200,16 @@ def generate_candidates(image):
         )
         boxes = boxes[:MAX_CANDIDATES]
     return boxes
+
 # DRAW GUI
+#creates the annotation screen
+#Orange = automatic proposal
+#Green = accepted biscuit
+#Blue = currently drawing a new box
+#A = accept proposals
+#R = reject all
+#S = skip
+#ENTER = save
 def draw_interface():
     global frame
     global current_boxes
@@ -206,9 +221,7 @@ def draw_interface():
 
         if box in current_boxes:
             continue
-
         x1, y1, x2, y2 = box
-
         cv2.rectangle(
             canvas,
             (x1, y1),
@@ -387,11 +400,11 @@ print("=" * 60)
 print()
 # Collect frames from videos
 for video_id, video_path in enumerate(VIDEO_PATHS):
-    indices = get_frame_indices(video_path,FRAMES_PER_VIDEO)
+    indices = get_frame_indices(video_path, FRAMES_PER_VIDEO)
     for index in indices:
-        all_frames.append(video_path,
-                          int(index),
-                          video_id)
+        all_frames.append(
+            (video_path, int(index), video_id)
+        )
 print(f"Total candidate frames: "
 f""f"{len(all_frames)}")
 # Shuffle so training/validation frames are varied

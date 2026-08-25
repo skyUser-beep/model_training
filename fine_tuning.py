@@ -48,7 +48,7 @@ results = model.train(
     plots=True,
     # SAVING
     project="runs/detect",
-    name="biscuit_finetuned",
+    name="biscuit_fine_tuned",
     exist_ok=True,
     save=True,
     save_period=10,
@@ -63,4 +63,4 @@ print("FINE-TUNING FINISHED")
 print("====================================")
 print()
 print("Best model should be:")
-print(r"runs\detect\biscuit_finetuned\weights\best.pt")
+print(r"runs\detect\biscuit_fine_tuned\weights\best.pt")

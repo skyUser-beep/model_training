@@ -1,8 +1,8 @@
 from ultralytics import YOLO
 import cv2
 # CONFIGURATION
-MODEL_PATH = r"runs\detect\biscuit_detector\weights\best.pt"
-VIDEO_PATH = r"conveyor.mp4"
+MODEL_PATH = r"C:\Users\Sahil\Downloads\WelcomeScreen\runs\detect\runs\detect\biscuit_fine_tuned\weights\best.pt"
+VIDEO_PATH = r"finetune.mp4"
 CONFIDENCE = 0.30
 
 # LOAD MODEL
