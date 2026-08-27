@@ -18,7 +18,7 @@ venv/
 # YOLO models
 *.pt
 *.onnx
-
+.env
 # Training outputs
 runs/
 
