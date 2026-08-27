@@ -1,9 +1,9 @@
 from ultralytics import YOLO
 import cv2
 # CONFIGURATION
-MODEL_PATH = r"C:\Users\Sahil\Downloads\WelcomeScreen\runs\detect\runs\detect\biscuit_fine_tuned\weights\best.pt"
+MODEL_PATH = r"C:\Users\Sahil\Downloads\WelcomeScreen\runs\detect\runs\detect\biscuit_v2\weights\best.pt"
 VIDEO_PATH = r"finetune.mp4"
-CONFIDENCE = 0.30
+CONFIDENCE = 0.50
 
 # LOAD MODEL
 model = YOLO(MODEL_PATH)

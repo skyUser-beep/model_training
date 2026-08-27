@@ -1,7 +1,7 @@
 import cv2 #openCV- opening video, reading frames, saving frames as images
 import os # create output directory, construct image filenames safely
-VIDEO_PATHS = ["con.mp4","conveyor.mp4"] # path
-OUTPUT_DIR = "dataset/raw_frames"  # save things
+VIDEO_PATHS = ["empty_con.mp4"] # path
+OUTPUT_DIR = "dataset/empty_frames"  # save things  for empty use another folder - /empty_frames
 os.makedirs(OUTPUT_DIR,exist_ok=True) #create folder
 frame_step = 15 # save upto 15 frames
 image_number = 0 # image numbering for saving
@@ -25,4 +25,3 @@ for video_path in VIDEO_PATHS:
         frame_number += 1
     cap.release() # finished
 print(f"Extracted {image_number} images.")
-

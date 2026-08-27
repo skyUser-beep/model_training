@@ -3,9 +3,8 @@ import numpy as np
 import time
 from collections import deque
 
-
 # CONFIGURATION
-VIDEO_PATH = "conveyor.mp4"
+VIDEO_PATH = "finetune.mp4"
 # Processing is done at this scale.
 # Display remains at the original video resolution.
 DETECTION_SCALE = 0.35

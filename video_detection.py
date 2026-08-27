@@ -2,7 +2,7 @@ import cv2
 import numpy as np
 
 # CONFIGURATION
-VIDEO_PATH = "con.mp4"
+VIDEO_PATH = "finetune.mp4"
 # Detection resolution
 # 0.35 means detection happens at about 35% of original size
 DETECTION_SCALE = 0.35

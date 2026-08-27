@@ -188,7 +188,7 @@ def generate_candidates(image):
                 score += 10
             candidate_boxes.append((x, y, x + bw, y + bh))
             candidate_scores.append(score)
-    # NMS
+    # NMS- Non Maximum Suppression
     boxes = nms_boxes(candidate_boxes,candidate_scores)
     # Limit number of proposals
     if len(boxes) > MAX_CANDIDATES:

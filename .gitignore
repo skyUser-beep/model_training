@@ -13,6 +13,7 @@ venv/
 *.avi
 *.mov
 *.mkv
+*.csv
 
 # YOLO models
 *.pt
