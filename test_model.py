@@ -2,7 +2,7 @@ from ultralytics import YOLO
 import cv2
 # CONFIGURATION
 MODEL_PATH = r"C:\Users\Sahil\Downloads\WelcomeScreen\runs\detect\runs\detect\biscuit_v2\weights\best.pt"
-VIDEO_PATH = r"finetune.mp4"
+VIDEO_PATH = r"video.mp4"
 CONFIDENCE = 0.50
 
 # LOAD MODEL
