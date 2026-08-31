@@ -1,7 +1,7 @@
 import cv2 #openCV- opening video, reading frames, saving frames as images
 import os # create output directory, construct image filenames safely
-VIDEO_PATHS = ["empty_con.mp4"] # path
-OUTPUT_DIR = "dataset/empty_frames"  # save things  for empty use another folder - /empty_frames
+VIDEO_PATHS = ["v1.mp4"] # path
+OUTPUT_DIR = "dataset/raw_frames"  # save things  for empty use another folder - /empty_frames
 os.makedirs(OUTPUT_DIR,exist_ok=True) #create folder
 frame_step = 15 # save upto 15 frames
 image_number = 0 # image numbering for saving
@@ -16,10 +16,7 @@ for video_path in VIDEO_PATHS:
         if not ret: # cannot read any frame by OpenCV
             break
         if frame_number % frame_step == 0:
-            filename = os.path.join(
-                OUTPUT_DIR,
-                f"frame_{image_number:05d}.jpg"
-            ) # create complete path
+            filename = os.path.join(OUTPUT_DIR,f"frame_{image_number:05d}.jpg") # create complete path
             cv2.imwrite(filename,frame) # frame to disk as JPEG image
             image_number += 1
         frame_number += 1

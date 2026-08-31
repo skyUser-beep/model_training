@@ -5,8 +5,8 @@ from tkinter import filedialog
 import os
 
 # CONFIGURATION
-MODEL_PATH = r"runs\detect\biscuit_detector\weights\best.pt"
-CONFIDENCE = 0.50
+MODEL_PATH = r"C:\Users\Sahil\Downloads\WelcomeScreen\runs\detect\runs\detect\biscuit_v2\weights\best.pt"
+CONFIDENCE = 0.30
 IMAGE_SIZE = 640
 # LOAD MODEL
 print("Loading model...")

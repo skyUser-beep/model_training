@@ -1,42 +1,36 @@
-import cv2 # video processing
-import numpy as np # used for array,image calc,sorting etc
-import os # creating folder
-import random # shuffle selected frames , divide frames b/w train and validation
-import math # for calculation purposes
-
+import cv2
+import os
+import shutil
+from ultralytics import YOLO
 # CONFIGURATION
-VIDEO_PATHS = [
-    "finetune.mp4",
-]
-# How many frames to sample from each video.
-# The script chooses frames spread throughout the video.
-FRAMES_PER_VIDEO = 100
-# Output YOLO dataset
-OUTPUT_DIR = "biscuit_dataset"
-IMAGE_TRAIN_DIR = os.path.join(
-    OUTPUT_DIR, "images", "train"
-)
-IMAGE_VAL_DIR = os.path.join(
-    OUTPUT_DIR, "images", "val"
-)
-LABEL_TRAIN_DIR = os.path.join(
-    OUTPUT_DIR, "labels", "train"
-)
-LABEL_VAL_DIR = os.path.join(
-    OUTPUT_DIR, "labels", "val"
-)
-# Validation percentage
-VAL_PERCENT = 0.20 # 20% images go to validation,80 to training
-# Maximum candidates shown for correction
-MAX_CANDIDATES = 80 # 80 boxes max to find region
-# Candidate filtering
-MIN_BOX_AREA_PERCENT = 0.0005
-MAX_BOX_AREA_PERCENT = 0.08
-# Biscuit aspect ratio is allowed to vary because of perspective.
-MIN_ASPECT = 0.25
-MAX_ASPECT = 4.5
-# Candidate overlap suppression
-NMS_THRESHOLD = 0.35 # Non-Maximum Suppression avoid multiple counting
+# Your existing trained YOLO model
+MODEL_PATH = r"C:\Users\Sahil\Downloads\WelcomeScreen\runs\detect\runs\detect\biscuit_v2\weights\best.pt"
+# Existing extracted frames
+RAW_FRAMES_DIR = r"dataset\raw_frames"
+# Final YOLO dataset
+OUTPUT_DIR = r"biscuit_dataset"
+IMAGE_TRAIN_DIR = os.path.join(OUTPUT_DIR, "images", "train")
+IMAGE_VAL_DIR = os.path.join(OUTPUT_DIR, "images", "val")
+LABEL_TRAIN_DIR = os.path.join(OUTPUT_DIR, "labels", "train")
+LABEL_VAL_DIR = os.path.join(OUTPUT_DIR, "labels", "val")
+
+# YOLO SETTINGS
+# IMPORTANT:
+# We use 0.20 because your current model was missing
+# many biscuits at 0.50.
+YOLO_CONFIDENCE = 0.20
+# YOLO image size during prediction
+YOLO_IMAGE_SIZE = 640
+# CPU
+YOLO_DEVICE = "cpu"
+# Your model has:
+# 0 = biscuit
+BISCUIT_CLASS_ID = 0
+
+# DATASET SPLIT
+# 80% training
+# 20% validation
+TRAIN_PERCENT = 0.80
 
 # CREATE DIRECTORIES
 for directory in [
@@ -48,16 +42,70 @@ for directory in [
     os.makedirs(directory, exist_ok=True)
 
 # GLOBAL GUI STATE
-
-current_boxes = [] # boxes accepted
-original_candidates = [] # boxes generated automatically by OpenCV
+frame = None
+current_boxes = []
+original_candidates = []
 drawing = False
 start_point = None
 current_mouse = (0, 0)
-frame = None
-display = None
-# IOU
-# Intersection Over Union.- IoU = intersection area / union area
+
+# LOAD YOLO MODEL
+print()
+print("=" * 65)
+print("YOLO SEMI-AUTOMATIC BISCUIT LABELING")
+print("=" * 65)
+print()
+if not os.path.exists(MODEL_PATH):
+    print("ERROR: YOLO model not found:")
+    print(MODEL_PATH)
+    raise SystemExit
+
+if not os.path.isdir(RAW_FRAMES_DIR):
+    print("ERROR: Raw frames folder not found:")
+    print(RAW_FRAMES_DIR)
+    raise SystemExit
+
+print("Loading YOLO model...")
+print(MODEL_PATH)
+
+model = YOLO(MODEL_PATH)
+
+print()
+print("Model loaded successfully.")
+print("YOLO confidence:", YOLO_CONFIDENCE)
+print("Prediction device:", YOLO_DEVICE)
+print()
+
+# GET RAW FRAME FILES
+image_extensions = (
+    ".jpg",
+    ".jpeg",
+    ".png",
+    ".bmp"
+)
+image_files = []
+for filename in os.listdir(RAW_FRAMES_DIR):
+    if filename.lower().endswith(image_extensions):
+        full_path = os.path.join(RAW_FRAMES_DIR,filename)
+        image_files.append(full_path)
+# Sort frames naturally by filename
+image_files.sort()
+if len(image_files) == 0:
+    print("ERROR: No images found in:")
+    print(RAW_FRAMES_DIR)
+    raise SystemExit
+print(f"Found {len(image_files)} extracted frames.")
+print()
+
+# TRAIN / VALIDATION SPLIT
+total_images = len(image_files)
+train_count = int(total_images * TRAIN_PERCENT)
+print("Dataset split:")
+print(f"Training images   : {train_count}")
+print(f"Validation images : "f"{total_images - train_count}")
+print()
+
+# IOU FUNCTION
 def box_iou(box1, box2):
     x1, y1, x2, y2 = box1
     a1, b1, a2, b2 = box2
@@ -65,160 +113,71 @@ def box_iou(box1, box2):
     inter_y1 = max(y1, b1)
     inter_x2 = min(x2, a2)
     inter_y2 = min(y2, b2)
-    iw = max(0, inter_x2 - inter_x1)
-    ih = max(0, inter_y2 - inter_y1)
+    iw = max(0,inter_x2 - inter_x1)
+    ih = max(0,inter_y2 - inter_y1)
     intersection = iw * ih
-    area1 = max(0, x2 - x1) * max(0, y2 - y1)
-    area2 = max(0, a2 - a1) * max(0, b2 - b1)
-    union = area1 + area2 - intersection
+    area1 = (max(0, x2 - x1)*max(0, y2 - y1))
+    area2 = (max(0, a2 - a1)*max(0, b2 - b1))
+    union = (area1+area2-intersection)
     if union <= 0:
-        return 0
+        return 0.0
     return intersection / union
 
-# NON-MAXIMUM SUPPRESSION - removes overlapping duplicates
-def nms_boxes(boxes, scores):
-    if len(boxes) == 0:
-        return []
-    order = np.argsort(scores)[::-1]
-    keep = []
-    while len(order) > 0:
-        i = order[0]
-        keep.append(i)
-        remaining = []
-        for j in order[1:]:
-            if box_iou(boxes[i],boxes[j]) < NMS_THRESHOLD:
-                remaining.append(j)
-        order = np.array(remaining,dtype=np.int32)
-    return [boxes[i]for i in keep]
+# YOLO PREDICTION
 
-# RECTANGULARITY
-# measures how much contour fills its bounding rectangle
-def rectangularity(contour):
-    area = cv2.contourArea(contour)
-    x, y, w, h = cv2.boundingRect(contour)
-    rectangle_area = w * h
-    if rectangle_area <= 0:
-        return 0
-    return area / rectangle_area
-
-# AUTOMATIC BISCUIT PROPOSALS
-#automatic annotation engine - find region that might be biscuits.
-#Mask 1 → color
-#Mask 2 → local brightness
-#Mask 3 → adaptive threshold
-#Mask 4 → edges
-def generate_candidates(image):
-    h, w = image.shape[:2]
-    image_area = h * w
-    # Slight blur reduces tiny biscuit texture/noise.
-    blurred = cv2.GaussianBlur(image,(5, 5),0)
-    # LAB color space
-    lab = cv2.cvtColor(blurred,cv2.COLOR_BGR2LAB)
-    L, A, B = cv2.split(lab)
-    # HSV
-    hsv = cv2.cvtColor(blurred,cv2.COLOR_BGR2HSV)
-    H, S, V = cv2.split(hsv)
-    masks = []
-    # MASK 1
-    # Warm biscuit color
-    # Use percentiles rather than hardcoded color thresholds.
-    a_low = np.percentile(A, 35)
-    a_high = np.percentile(A, 98)
-    b_low = np.percentile(B, 35)
-    b_high = np.percentile(B, 98)
-    mask1 = ((A >= a_low) &(A <= a_high) &(B >= b_low) &(B <= b_high)).astype(np.uint8) * 255
-    masks.append(mask1)
-    # MASK 2
-    # Local brightness
-    local_mean = cv2.GaussianBlur(L,(0, 0),15)
-    difference = cv2.absdiff(L,local_mean)
-    diff_threshold = np.percentile(difference,55)
-    mask2 = (difference > diff_threshold).astype(np.uint8) * 255
-    masks.append(mask2)
-    # MASK 3
-    # Adaptive brightness
-    mask3 = cv2.adaptiveThreshold(L,255,cv2.ADAPTIVE_THRESH_GAUSSIAN_C,cv2.THRESH_BINARY,51,-3)
-    masks.append(mask3)
-    # MASK 4
-    # Edge-based rectangular regions
-    edges = cv2.Canny(L,40,120)
-    edge_kernel = cv2.getStructuringElement(cv2.MORPH_RECT,(9, 9))
-    mask4 = cv2.morphologyEx(edges,cv2.MORPH_CLOSE,edge_kernel,iterations=2)
-    masks.append(mask4)
-    # Process every mask
-    candidate_boxes = []
-    candidate_scores = []
-    min_area = image_area * MIN_BOX_AREA_PERCENT
-    max_area = image_area * MAX_BOX_AREA_PERCENT
-    for mask in masks:
-        # Morphological cleanup
-        kernel_small = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(5, 5))
-        clean = cv2.morphologyEx(mask,cv2.MORPH_OPEN,kernel_small)
-        clean = cv2.morphologyEx(clean,cv2.MORPH_CLOSE,kernel_small,iterations=2)
-        # Contours
-        contours, _ = cv2.findContours(clean,cv2.RETR_EXTERNAL,cv2.CHAIN_APPROX_SIMPLE)
-        for contour in contours:
-            area = cv2.contourArea(contour)
-            if area < min_area:
+def generate_yolo_candidates(image):
+    candidates = []
+    results = model.predict(
+        source=image,
+        conf=YOLO_CONFIDENCE,
+        imgsz=YOLO_IMAGE_SIZE,
+        device=YOLO_DEVICE,
+        verbose=False
+    )
+    for result in results:
+        if result.boxes is None:
+            continue
+        if len(result.boxes) == 0:
+            continue
+        boxes = result.boxes.xyxy.cpu().numpy()
+        classes = result.boxes.cls.cpu().numpy()
+        confidences = result.boxes.conf.cpu().numpy()
+        for box, class_id, confidence in zip(
+            boxes,
+            classes,
+            confidences
+        ):
+            class_id = int(class_id)
+            # Only keep biscuit class
+            if class_id != BISCUIT_CLASS_ID:
                 continue
-            if area > max_area:
-                continue
-            x, y, bw, bh = cv2.boundingRect(contour)
-            if bw <= 5 or bh <= 5:
-                continue
-            aspect = bw/ float(bh)
-            if aspect < MIN_ASPECT:
-                continue
-            if aspect > MAX_ASPECT:
-                continue
-            rect = rectangularity(contour)
-            # Biscuit-like score
-            score = 0
-            # Rectangularity
-            score += rect * 40
-            # Prefer moderate aspect ratios
-            aspect_score = min(aspect,1.0 / aspect)
-            score += aspect_score * 20
-            # Area score
-            normalized_area = (area / image_area)
-            if normalized_area > 0.002:
-                score += 20
-            # Bounding box dimensions
-            if bw > 15 and bh > 15:
-                score += 10
-            candidate_boxes.append((x, y, x + bw, y + bh))
-            candidate_scores.append(score)
-    # NMS- Non Maximum Suppression
-    boxes = nms_boxes(candidate_boxes,candidate_scores)
-    # Limit number of proposals
-    if len(boxes) > MAX_CANDIDATES:
-        # Sort by area
-        boxes = sorted(boxes,key=lambda b:
-                (b[2] - b[0]) *
-                (b[3] - b[1]),
-            reverse=True
-        )
-        boxes = boxes[:MAX_CANDIDATES]
-    return boxes
+            x1, y1, x2, y2 = box
+            x1 = int(round(x1))
+            y1 = int(round(y1))
+            x2 = int(round(x2))
+            y2 = int(round(y2))
+            candidates.append(
+                {
+                    "box": (x1, y1, x2, y2),
+                    "confidence": float(confidence)
+                }
+            )
+    return candidates
 
 # DRAW GUI
-#creates the annotation screen
-#Orange = automatic proposal
-#Green = accepted biscuit
-#Blue = currently drawing a new box
-#A = accept proposals
-#R = reject all
-#S = skip
-#ENTER = save
 def draw_interface():
     global frame
     global current_boxes
     global original_candidates
     global current_mouse
     canvas = frame.copy()
-    # Candidate boxes
-    for box in original_candidates:
 
+    # YOLO candidate boxes
+    # Orange
+    for candidate in original_candidates:
+        box = candidate["box"]
+        confidence = candidate["confidence"]
+        # Don't draw candidate if already accepted
         if box in current_boxes:
             continue
         x1, y1, x2, y2 = box
@@ -226,13 +185,22 @@ def draw_interface():
             canvas,
             (x1, y1),
             (x2, y2),
-            (0, 180, 255),
-            1
+            (0, 165, 255),
+            2
+        )
+        cv2.putText(
+            canvas,
+            f"YOLO {confidence:.2f}",
+            (x1, max(15, y1 - 5)),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.45,
+            (0, 165, 255),
+            1,
+            cv2.LINE_AA
         )
     # Accepted boxes
-    for i, box in enumerate(
-        current_boxes
-    ):
+    # Green
+    for i, box in enumerate(current_boxes):
         x1, y1, x2, y2 = box
         cv2.rectangle(
             canvas,
@@ -244,75 +212,121 @@ def draw_interface():
         cv2.putText(
             canvas,
             str(i + 1),
-            (x1, max(15, y1 - 4)),
+            (x1, max(15, y1 - 5)),
             cv2.FONT_HERSHEY_SIMPLEX,
-            0.45,
+            0.50,
             (0, 255, 0),
-            1
+            2,
+            cv2.LINE_AA
         )
-    # Manual rectangle while drawing
+
+    # Manual box being drawn
+    # Blue
     if drawing and start_point is not None:
         x1, y1 = start_point
         x2, y2 = current_mouse
-        cv2.rectangle(canvas,(x1, y1),(x2, y2),(255, 0, 0),2)
-    # Instructions
-    cv2.rectangle(canvas, (0, 0),(canvas.shape[1], 75),(25, 25, 25),-1)
-    cv2.putText(canvas,
-        "A=accept proposals | R=reject all | S=skip | ENTER=save",
+        cv2.rectangle(
+            canvas,
+            (x1, y1),
+            (x2, y2),
+            (255, 0, 0),
+            2
+        )
+
+    # Header
+    header_height = 85
+    cv2.rectangle(
+        canvas,
+        (0, 0),
+        (
+            canvas.shape[1],
+            header_height
+        ),
+        (25, 25, 25),
+        -1
+    )
+    cv2.putText(
+        canvas,
+        "A=Accept YOLO | R=Reject All | S=Skip | ENTER=Save | ESC=Quit",
         (10, 25),
         cv2.FONT_HERSHEY_SIMPLEX,
-        0.55,
+        0.52,
         (255, 255, 255),
-        1
+        1,
+        cv2.LINE_AA
     )
-    cv2.putText(canvas,
-        "Left-drag=add box | Right-click=remove nearest",
+    cv2.putText(
+        canvas,
+        "LEFT DRAG = Add Box | RIGHT CLICK = Delete Box",
         (10, 50),
         cv2.FONT_HERSHEY_SIMPLEX,
-        0.55,
+        0.52,
         (255, 255, 255),
-        1
+        1,
+        cv2.LINE_AA
     )
-    cv2.putText(canvas,
-        f"Boxes: {len(current_boxes)}",
-        (canvas.shape[1] - 130, 25),
+    cv2.putText(
+        canvas,
+        f"Accepted boxes: {len(current_boxes)}",
+        (10, 75),
         cv2.FONT_HERSHEY_SIMPLEX,
-        0.55,
+        0.50,
         (0, 255, 0),
-        2
+        2,
+        cv2.LINE_AA
     )
     return canvas
+
 # MOUSE CALLBACK
-def mouse_callback(event,x,y,flags,param):
+def mouse_callback(
+    event,
+    x,
+    y,
+    flags,
+    param
+):
     global drawing
     global start_point
     global current_mouse
     global current_boxes
-    current_mouse = (x,y)
-    # Left button down
+    current_mouse = (x, y)
+
+    # LEFT MOUSE BUTTON
+    # Start drawing
     if event == cv2.EVENT_LBUTTONDOWN:
         drawing = True
-        start_point = (x,y)
-    # Left button up
-    elif (event ==cv2.EVENT_LBUTTONUP):
+        start_point = (x, y)
+    # LEFT MOUSE BUTTON RELEASE
+    # Finish drawing
+    elif event == cv2.EVENT_LBUTTONUP:
         if not drawing:
             return
         drawing = False
         x1, y1 = start_point
         x2, y2 = x, y
-        # Normalize coordinates
         left = min(x1, x2)
         right = max(x1, x2)
         top = min(y1, y2)
         bottom = max(y1, y2)
         width = right - left
         height = bottom - top
-        # Ignore accidental tiny clicks
+        # Ignore accidental tiny boxes
         if width < 10 or height < 10:
+            start_point = None
             return
-        current_boxes.append((left,top,right,bottom))
+        new_box = (
+            left,
+            top,
+            right,
+            bottom
+        )
+        # Prevent exact duplicate box
+        if new_box not in current_boxes:
+            current_boxes.append(new_box)
         start_point = None
-    # Right click = delete nearest box
+
+    # RIGHT CLICK
+    # Delete nearest accepted box
     elif event == cv2.EVENT_RBUTTONDOWN:
         if len(current_boxes) == 0:
             return
@@ -320,193 +334,211 @@ def mouse_callback(event,x,y,flags,param):
         best_distance = float("inf")
         for i, box in enumerate(current_boxes):
             x1, y1, x2, y2 = box
-            cx = (x1 + x2) / 2
-            cy = (y1 + y2) / 2
-            distance = math.sqrt((x - cx) ** 2 +(y - cy) ** 2)
+            cx = (x1 + x2) / 2.0
+            cy = (y1 + y2) / 2.0
+            distance = ((x - cx) ** 2+(y - cy) ** 2) ** 0.5
             if distance < best_distance:
                 best_distance = distance
                 best_index = i
-        # Delete only if reasonably close
         if best_index is not None:
-            x1, y1, x2, y2 = current_boxes[best_index]
-            diagonal = math.sqrt((x2 - x1) ** 2 +(y2 - y1) ** 2)
+            x1, y1, x2, y2 = (current_boxes[best_index])
+            diagonal = ((x2 - x1) ** 2+(y2 - y1) ** 2) ** 0.5
             if best_distance < diagonal:
                 current_boxes.pop(best_index)
-# SAVE YOLO LABEL
-def save_yolo_label(image_path,boxes):
-    image = cv2.imread(image_path)
-    h, w = image.shape[:2]
-    label_path = os.path.splitext(image_path)[0] + ".txt"
-    # Convert image path to labels directory
-    if IMAGE_TRAIN_DIR in image_path:
-        label_path = image_path.replace(
-            IMAGE_TRAIN_DIR,
-            LABEL_TRAIN_DIR
-        )
-    elif IMAGE_VAL_DIR in image_path:
-        label_path = image_path.replace(
-            IMAGE_VAL_DIR,
-            LABEL_VAL_DIR
-        )
-    label_path = os.path.splitext(
-        label_path
-    )[0] + ".txt"
 
-    with open(label_path,"w") as f:
+
+# SAVE YOLO LABEL
+def save_yolo_label(label_path,boxes,image_width,image_height):
+    with open(label_path, "w") as f:
         for box in boxes:
             x1, y1, x2, y2 = box
-            # Clamp
-            x1 = max(0, min(w - 1, x1))
-            x2 = max(0, min(w - 1, x2))
-            y1 = max(0, min(h - 1, y1))
-            y2 = max(0, min(h - 1, y2))
+            # Clamp coordinates
+            x1 = max(0,min(image_width - 1, x1))
+            x2 = max(0,min(image_width - 1,x2))
+            y1 = max(0, min( image_height - 1,y1))
+            y2 = max(0,min(image_height - 1,y2))
             bw = x2 - x1
             bh = y2 - y1
             if bw <= 1 or bh <= 1:
                 continue
-            cx = ((x1 + x2) / 2) / w
-            cy = ((y1 + y2) / 2) / h
-            nw = bw / w
-            nh = bh / h
-            # class 0 = biscuit
-            f.write(f"0 {cx:.6f} {cy:.6f} "f"{nw:.6f} {nh:.6f}\n")
-# EXTRACT FRAME INDICES
-def get_frame_indices(video_path,count):
-    cap = cv2.VideoCapture(video_path)
-    if not cap.isOpened():
-        print("Could not open:",video_path)
-        return []
-    total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    cap.release()
-    if total <= 0:
-        return []
-    count = min(count,total)
-    # Spread samples across video
-    indices = np.linspace(
-        0,
-        total - 1,
-        count,
-        dtype=np.int32
+            # YOLO normalized format
+            cx = ((x1 + x2) / 2.0) / image_width
+            cy = ((y1 + y2) / 2.0) / image_height
+            nw = bw / image_width
+            nh = bh / image_height
+            # Class 0 = biscuit
+            f.write(
+                f"0 "
+                f"{cx:.6f} "
+                f"{cy:.6f} "
+                f"{nw:.6f} "
+                f"{nh:.6f}\n"
+            )
+
+# CREATE DATASET YAML
+def create_data_yaml():
+    yaml_path = os.path.join(
+        OUTPUT_DIR,
+        "data.yaml"
     )
-    return list(np.unique(indices))
-# MAIN
+    absolute_dataset = os.path.abspath(
+        OUTPUT_DIR
+    ).replace("\\", "/")
+    with open(yaml_path,"w") as f:
+        f.write(f"path: {absolute_dataset}\n")
+        f.write("train: images/train\n")
+        f.write("val: images/val\n")
+        f.write("\n")
+        f.write("names:\n")
+        f.write("  0: biscuit\n")
+    return yaml_path
+
+# MAIN GUI
 cv2.namedWindow("Biscuit Labeling",cv2.WINDOW_NORMAL)
 cv2.setMouseCallback("Biscuit Labeling",mouse_callback)
-all_frames = []
-print()
-print("=" * 60)
-print("SEMI-AUTOMATIC BISCUIT LABELING")
-print("=" * 60)
-print()
-# Collect frames from videos
-for video_id, video_path in enumerate(VIDEO_PATHS):
-    indices = get_frame_indices(video_path, FRAMES_PER_VIDEO)
-    for index in indices:
-        all_frames.append(
-            (video_path, int(index), video_id)
-        )
-print(f"Total candidate frames: "
-f""f"{len(all_frames)}")
-# Shuffle so training/validation frames are varied
-random.shuffle(all_frames)
-# Process frames
 saved_count = 0
 skipped_count = 0
-for frame_index,(video_path,target_frame,video_id) in enumerate(all_frames):
-    cap = cv2.VideoCapture(video_path)
-    if not cap.isOpened():
+print()
+print("=" * 65)
+print("STARTING LABELING")
+print("=" * 65)
+print()
+print("Instructions:")
+print()
+print("A       = Accept all YOLO proposals")
+print("R       = Reject all proposals")
+print("S       = Skip this frame")
+print("ENTER   = Save corrected labels")
+print("ESC     = Quit")
+print()
+print("LEFT DRAG  = Add missing biscuit")
+print("RIGHT CLICK = Delete incorrect biscuit")
+print()
+print("IMPORTANT:")
+print("Check EVERY biscuit before pressing ENTER.")
+print()
+
+# PROCESS EACH IMAGE
+for frame_index, image_path in enumerate(image_files):
+    filename = os.path.basename(image_path)
+    print()
+    print("=" * 65)
+    print(f"Frame {frame_index + 1}/"f"{total_images}")
+    print(f"File: {filename}")
+    # Read image
+    original = cv2.imread(image_path)
+    if original is None:
+        print("WARNING: Could not read:")
+        print(image_path)
         continue
-    cap.set(cv2.CAP_PROP_POS_FRAMES,target_frame)
-    ret, original = cap.read()
-    cap.release()
-    if not ret:
-        continue
-    # Keep video resolution
     frame = original.copy()
-    # Generate automatic proposals
-    print(f"\n[{frame_index + 1}/"f"{len(all_frames)}] "f"Generating proposals...")
-    original_candidates = (generate_candidates(frame))
-    current_boxes = (list(original_candidates))
-    # GUI loop
+
+    # YOLO prediction
+    print("Running YOLO prediction...")
+    candidate_data = (generate_yolo_candidates(frame))
+    original_candidates = (candidate_data)
+    # Start with YOLO boxes
+    current_boxes = [candidate["box"]
+        for candidate in candidate_data]
+    print(f"YOLO proposals: "f"{len(current_boxes)}")
+    print()
+    print("Check the frame carefully.")
+    print("Add missing biscuits manually.")
+    print("Delete incorrect boxes.")
+    # GUI LOOP
     while True:
         display = draw_interface()
         cv2.imshow("Biscuit Labeling",display)
-        key = cv2.waitKey(30) & 0xFF
-        # A = accept all automatic boxes
+        key = ( cv2.waitKey(30)& 0xFF)
+        # A = ACCEPT YOLO PROPOSALS
+
         if key == ord("a"):
-            current_boxes = (list(original_candidates))
-        # R = reject all
+            current_boxes = [candidate["box"]
+                for candidate in original_candidates]
+            print( "Accepted all YOLO proposals.")
+        # R = REJECT ALL
         elif key == ord("r"):
             current_boxes = []
-        # S = skip frame
+            print("All boxes removed.")
+        # S = SKIP
         elif key == ord("s"):
             skipped_count += 1
+            print( "Skipped frame.")
             break
-        # ENTER = save
-        elif key in (13,10):
+        # ENTER = SAVE
+        elif key in (13, 10):
             if len(current_boxes) == 0:
-                print("WARNING : No boxes. Press ENTER again to save empty label.")
-            # Decide train/val
-            if random.random() < VAL_PERCENT:
-                image_dir = (IMAGE_VAL_DIR)
-                label_dir = (LABEL_VAL_DIR)
+                print()
+                print("WARNING:")
+                print( "There are ZERO boxes.")
+                print("If this frame really contains no biscuits,")
+                print("press ENTER again." )
+                # Wait for another key
+                confirmation = (cv2.waitKey(0)&0xFF)
+                if confirmation not in (13,10):
+                    continue
+            # Decide train or validation
+            if frame_index < train_count:
+                image_dir = IMAGE_TRAIN_DIR
+                label_dir = LABEL_TRAIN_DIR
+                split_name = "TRAIN"
             else:
-                image_dir = (IMAGE_TRAIN_DIR)
-                label_dir = (LABEL_TRAIN_DIR)
-            filename = (f"video{video_id}_"f"frame{target_frame:08d}.jpg")
-            image_path = os.path.join(image_dir,filename)
-            label_path = os.path.join(label_dir,filename.replace(".jpg",".txt"))
-            cv2.imwrite(image_path,frame)
+                image_dir = IMAGE_VAL_DIR
+                label_dir = LABEL_VAL_DIR
+                split_name = "VAL"
+            # Create filename
+            base_name = os.path.splitext(filename)[0]
+            output_filename = f"{base_name}.jpg"
+            image_output_path = (os.path.join(image_dir,output_filename))
+            label_output_path = (os.path.join(label_dir, base_name + ".txt" ))
+            # Save image
+            cv2.imwrite(image_output_path, frame)
             # Save YOLO labels
             h, w = frame.shape[:2]
-            with open(label_path,"w") as f:
-                for box in current_boxes:
-                    x1, y1, x2, y2 = box
-                    x1 = max(0,min(w - 1, x1))
-                    x2 = max(0,min(w - 1, x2))
-                    y1 = max(0,min(h - 1, y1))
-                    y2 = max(0,min(h - 1, y2))
-                    bw = x2 - x1
-                    bh = y2 - y1
-                    if bw <= 1 or bh <= 1:
-                        continue
-                    cx = ((x1 + x2) / 2) / w
-                    cy = ((y1 + y2) / 2 ) / h
-                    nw = bw / w
-                    nh = bh / h
-                    f.write(f"0 "f"{cx:.6f} "f"{cy:.6f} "f"{nw:.6f} "f"{nh:.6f}\n")
-            saved_count +=1
-            print(f"Saved: {filename} | "f"Boxes: "f"{len(current_boxes)}")
+            save_yolo_label(label_output_path,current_boxes, w,h)
+            saved_count += 1
+            print()
+            print(f"SAVED [{split_name}]")
+            print(f"Image: "f"{image_output_path}")
+            print(f"Boxes: "f"{len(current_boxes)}")
             break
-        # ESC = quit
+        # ESC = QUIT
         elif key == 27:
             print()
-            print("Stopping...")
+            print("Stopping labeling...")
             cv2.destroyAllWindows()
-            print(f"Saved frames: "f"{saved_count}")
-            print(f"Skipped frames: "f"{skipped_count}")
+            print()
+            print(f"Saved frames   : "f"{saved_count}")
+            print(f"Skipped frames : "f"{skipped_count}")
+            print()
             raise SystemExit
+
+# FINISH
 cv2.destroyAllWindows()
-# DATASET YAML
-yaml_path = os.path.join(OUTPUT_DIR,"data.yaml")
-# Use forward slashes for YAML
-absolute_dataset = os.path.abspath(OUTPUT_DIR).replace("\\", "/")
-with open(yaml_path,"w") as f:
-    f.write(f"path: {absolute_dataset}\n")
-    f.write("train: images/train\n")
-    f.write("val: images/val\n")
-    f.write("\n")
-    f.write("names:\n")
-    f.write("  0: biscuit\n")
+# CREATE DATA.YAML
+yaml_path = create_data_yaml()
+# FINAL SUMMARY
 print()
-print("=" * 60)
+print("=" * 65)
 print("LABELING COMPLETE")
-print("=" * 60)
+print("=" * 65)
 print()
-print(f"Saved frames : {saved_count}")
-print(f"Skipped      : {skipped_count}")
-print(f"Dataset      : {OUTPUT_DIR}")
-print(f"YAML         : {yaml_path}")
+print(f"Total source frames : "f"{total_images}")
+print(f"Saved frames        : "f"{saved_count}")
+print(f"Skipped frames      : "f"{skipped_count}")
 print()
-print("Next step:")
-print( "Train YOLO using dataset/data.yaml")
+print("Dataset:")
+print(os.path.abspath(OUTPUT_DIR))
+print()
+print("data.yaml:")
+print(yaml_path)
+print()
+print("=" * 65)
+print("NEXT STEP")
+print("=" * 65)
+print()
+print("Run your finetune.py")
+print()
+print(r"New model will be:")
+print(r"runs\detect\biscuit_v2\weights\best.pt")
+print()
