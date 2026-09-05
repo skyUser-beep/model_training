@@ -5,9 +5,9 @@ from ultralytics import YOLO
 
 # hikvision + YOLO V2 LIVE TEST
 # 1. CAMERA SETTINGS
-CAMERA_IP = "192.168.160.20"
+CAMERA_IP = "YOUR_IP"
 USERNAME = "admin"
-PASSWORD = "CCTVM_P@ssw0rd@2"
+PASSWORD = "YOUR_PASSWORD"
 ENCODED_USERNAME = quote(USERNAME, safe="")
 ENCODED_PASSWORD = quote(PASSWORD, safe="")
 # hikvision main stream
