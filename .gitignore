@@ -28,3 +28,6 @@ biscuit_dataset/
 
 # Python cache
 *.pyo
+
+#folders
+diagnostic_results
