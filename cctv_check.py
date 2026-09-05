@@ -222,9 +222,7 @@ while True:
             f"Status: {current_status}"
         )
     # QUIT
-    key = cv2.waitKey(1) & 0xF
-    if key == ord("q"):
-        print("Q pressed. Stopping...")
+    if cv2.waitKey(1) & 0xFF == ord('q'):
         break
 # CLEANUP
 cap.release()

@@ -1,8 +1,8 @@
 from ultralytics import YOLO
 import cv2
 # CONFIGURATION
-MODEL_PATH = r"C:\Users\Sahil\Downloads\WelcomeScreen\runs\detect\runs\detect\biscuit_v2\weights\best.pt"
-VIDEO_PATH = r"conveyor.mp4"
+MODEL_PATH = r"C:\Users\Sahil\Downloads\WelcomeScreen\runs\detect\biscuit_detector-3\weights\best.pt"
+VIDEO_PATH = r"finetune.mp4"
 CONFIDENCE = 0.50
 # Counting line position
 # Change this value if necessary
@@ -46,8 +46,7 @@ while True:
         break
     frame_number += 1
     # YOLO TRACKING
-    results = model.track(
-        frame,
+    results = model.track(frame,
         conf=CONFIDENCE,
         persist=True,
         tracker="bytetrack.yaml",
@@ -57,15 +56,13 @@ while True:
     # DRAW DETECTIONS
     annotated_frame = result.plot()
     # DRAW COUNTING LINE
-    cv2.line(
-        annotated_frame,
+    cv2.line(annotated_frame,
         (line_x, 0),
         (line_x, height),
         (0, 0, 255),
         3
     )
-    cv2.putText(
-        annotated_frame,
+    cv2.putText(annotated_frame,
         "COUNTING LINE",
         (line_x+10,30),
         cv2.FONT_HERSHEY_SIMPLEX,
@@ -85,16 +82,14 @@ while True:
             center_x = int((x1 + x2) / 2)
             center_y = int((y1 + y2) / 2)
             # DRAW CENTER POINT
-            cv2.circle(
-                annotated_frame,
+            cv2.circle(annotated_frame,
                 (center_x, center_y),
                 5,
                 (255, 0, 0),
                 -1
             )
             # Display tracking ID
-            cv2.putText(
-                annotated_frame,
+            cv2.putText(annotated_frame,
                 f"ID: {track_id}",
                 (center_x - 30, center_y - 10),
                 cv2.FONT_HERSHEY_SIMPLEX,
@@ -106,31 +101,22 @@ while True:
             if track_id in previous_positions:
                 previous_x = previous_positions[track_id]
                 # COUNT WHEN MOVING DOWN THROUGH LINE
-                crossed_line = (
-                    previous_x < line_x
-                    and center_x >= line_x
-                )
+                crossed_line =  previous_x < line_x <= center_x
                 if crossed_line:
                     if track_id not in counted_ids:
                         counted_ids.add(track_id)
                         total_biscuits += 1
-                        print(
-                            f"Biscuit counted | "
-                            f"ID: {track_id} | "
-                            f"Total: {total_biscuits}"
-                        )
+                        print(f"Biscuit counted | ID: {track_id} | Total: {total_biscuits}")
             # Save current position
             previous_positions[track_id] = center_x
     # DISPLAY TOTAL
-    cv2.rectangle(
-        annotated_frame,
+    cv2.rectangle(annotated_frame,
         (10, 10),
         (300, 70),
         (0, 0, 0),
         -1
     )
-    cv2.putText(
-        annotated_frame,
+    cv2.putText(annotated_frame,
         f"Total Biscuits: {total_biscuits}",
         (20, 50),
         cv2.FONT_HERSHEY_SIMPLEX,
@@ -139,10 +125,7 @@ while True:
         2
     )
     # DISPLAY VIDEO
-    cv2.imshow(
-        "Biscuit Counting - Sideways",
-        annotated_frame
-    )
+    cv2.imshow("Biscuit Counting - Sideways",annotated_frame)
     # Q = QUIT
     if cv2.waitKey(1) & 0xFF == ord("q"):
         break

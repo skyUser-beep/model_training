@@ -4,7 +4,7 @@ import time
 from collections import deque
 
 # CONFIGURATION
-VIDEO_PATH = "finetune.mp4"
+VIDEO_PATH = "v4.mp4"
 # Processing is done at this scale.
 # Display remains at the original video resolution.
 DETECTION_SCALE = 0.35

@@ -1,0 +1,28 @@
+HORIZONTAL BISCUIT SIZE + TWO-LINE TRACKING
+======================================================================
+
+Model: C:\Users\Sahil\Downloads\WelcomeScreen\runs\detect\biscuit_detector-3\weights\best.pt
+Video: testing_video.mp4
+Confidence: 0.5
+Direction: BOTTOM_TO_TOP
+Line 1 Y: 768
+Line 2 Y: 512
+
+SIZE MEASUREMENT
+Standard width: 4.00 px
+Standard height: 8.00 px
+Tolerance: 10.0%
+Accepted width: 3.60 - 4.40 px
+Accepted height: 7.20 - 8.80 px
+
+RESULTS
+Frames processed: 29
+Unique ByteTrack IDs: 2
+Visual biscuits created: 2
+Line 1 crossed: 0
+Line 2 crossed: 0
+Accepted IDs: 0
+Rejected IDs: 0
+FINAL COUNT: 0
+
+COUNTED IDS:

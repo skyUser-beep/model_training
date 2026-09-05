@@ -1,0 +1,28 @@
+HORIZONTAL TWO-LINE BISCUIT TRACKING
+======================================================================
+
+Model: C:\Users\Sahil\Downloads\WelcomeScreen\runs\detect\biscuit_detector-3\weights\best.pt
+Video: v1.mp4
+Confidence: 0.5
+Direction: BOTTOM -> TOP
+Counting: LINE 1 -> LINE 2
+
+Line 1 Y: 312
+Line 2 Y: 192
+
+Frames processed: 130
+Unique ByteTrack IDs: 301
+Line 1 crossed: 104
+Line 2 crossed: 9
+FINAL COUNT: 9
+
+Counted IDs:
+39: 10
+60: 17
+121: 53
+265: 66
+333: 67
+378: 64
+381: 5
+389: 4
+433: 35
