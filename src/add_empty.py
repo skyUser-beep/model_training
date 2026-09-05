@@ -4,7 +4,7 @@ import random
 
 
 # CONFIGURATION
-SOURCE_DIR = r"dataset\empty_frames"
+SOURCE_DIR = r"../dataset/empty_frames"
 TRAIN_IMAGES = r"biscuit_dataset\images\train"
 VAL_IMAGES = r"biscuit_dataset\images\val"
 TRAIN_LABELS = r"biscuit_dataset\labels\train"

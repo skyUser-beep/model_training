@@ -1,6 +1,6 @@
 from ultralytics import YOLO
 
-model = YOLO("yolo26n.pt")
+model = YOLO("../yolo26n.pt")
 model.train(
     data="biscuit_dataset/data.yaml",
     epochs=100,

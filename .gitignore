@@ -28,3 +28,4 @@ biscuit_dataset/
 
 # Python cache
 *.pyo
+videos/

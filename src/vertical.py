@@ -29,7 +29,7 @@ BOX_THICKNESS = 2
 LINE_THICKNESS = 3
 
 # Output
-OUTPUT_DIR = "diagnostic_results"
+OUTPUT_DIR = "../diagnostic_results"
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
