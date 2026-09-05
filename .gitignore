@@ -28,4 +28,10 @@ biscuit_dataset/
 
 # Python cache
 *.pyo
+<<<<<<< HEAD
 videos/
+=======
+
+#folders
+diagnostic_results
+
